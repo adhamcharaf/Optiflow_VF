@@ -76,10 +76,6 @@ python scripts_ml/orchestrator.py predict_daily_sales.py
 
 ```
 optiflow_mvp/
-├── .claude/                    # Configuration Claude Code
-│   ├── CLAUDE.md              # Contexte complet du projet
-│   ├── commands/              # Slash commands par fonctionnalité
-│   └── steering/              # Contraintes et règles
 ├── src/                       # Code source principal
 │   ├── main.py               # Point d'entrée Streamlit
 │   ├── pages/                # 3 pages selon spécifications
@@ -206,34 +202,6 @@ Taux = Ventes_30j / Stock_moyen_période
 - Backup automatique avant modifications
 
 ## 📞 Support et développement
-
-### Claude Code Commands
-```bash
-# Gestion des alertes
-/alertes status
-/alertes critique
-/alertes calcul [article_id] [date] [marge]
-
-# Dashboard
-/dashboard kpis
-/dashboard sante
-/dashboard tendances
-
-# Prédictions
-/predictions generate [article_id] [jours]
-/predictions accuracy
-/predictions batch
-
-# Machine Learning
-/ml batch                    # Batch nocturne complet
-/ml predict-sales [id]       # Script 1
-/ml calc-alerts             # Script 2
-
-# Base de données
-/db schema
-/db stats
-/db backup
-```
 
 ### Architecture decisions
 - **Streamlit** : Interface simple et rapide

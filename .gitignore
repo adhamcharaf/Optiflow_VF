@@ -72,3 +72,6 @@ htmlcov/
 
 # Documentation build
 docs/_build/
+
+# Claude configuration (local dev only)
+.claude/
