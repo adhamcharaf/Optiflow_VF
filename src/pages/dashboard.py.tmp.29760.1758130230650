@@ -1,0 +1,548 @@
+"""
+Dashboard OptiFlow - Page d'accueil centralisée
+Affiche l'essentiel en 3 rangées : bandeau d'état, modules d'action, graphiques
+"""
+
+import streamlit as st
+import pandas as pd
+import sqlite3
+import plotly.graph_objects as go
+import plotly.express as px
+from datetime import datetime, timedelta
+import sys
+from pathlib import Path
+
+# Configuration de la page
+st.set_page_config(
+    page_title="OptiFlow Dashboard",
+    page_icon="📊",
+    layout="wide"
+)
+
+# Ajouter les chemins nécessaires
+sys.path.append(str(Path(__file__).parent.parent.parent))
+
+# Import des utilitaires
+from utils.database import OptiflowDB
+
+# Couleurs cohérentes
+COLORS = {
+    'CRITIQUE': '#dc3545',
+    'ATTENTION': '#ffc107',
+    'OK': '#28a745'
+}
+
+@st.cache_data(ttl=300)  # Cache de 5 minutes
+def load_dashboard_data():
+    """Charge toutes les données nécessaires au dashboard en une fois"""
+    db = OptiflowDB()
+    data = {}
+
+    # Import pandas pour les DataFrames vides
+    import pandas as pd
+
+    try:
+        # 1. Compteurs d'alertes
+        query_alerts = """
+            SELECT
+                CASE
+                    WHEN severity = 'critical' THEN 'CRITIQUE'
+                    WHEN severity = 'warning' THEN 'ATTENTION'
+                    WHEN severity = 'high' THEN 'CRITIQUE'
+                    WHEN severity = 'medium' THEN 'ATTENTION'
+                    ELSE 'OK'
+                END as niveau,
+                COUNT(*) as count
+            FROM alerts
+            WHERE status = 'active'
+            GROUP BY severity
+        """
+        alerts_df = db.get_dataframe(query_alerts)
+        data['alerts'] = alerts_df
+
+        # 2. Valeur totale du stock (en millions pour lisibilité)
+        query_stock = """
+            SELECT
+                COALESCE(SUM(sl.quantity_on_hand * p.unit_price), 0) as valeur_totale,
+                COALESCE(SUM(sl.quantity_on_hand), 0) as quantite_totale,
+                COUNT(DISTINCT p.id) as nb_produits
+            FROM stock_levels sl
+            JOIN products p ON sl.product_id = p.id
+        """
+        stock_value = db.execute_query(query_stock, fetch_all=False)
+        data['stock_value'] = (stock_value[0] / 1_000_000) if stock_value else 0  # En millions
+        data['stock_quantity'] = stock_value[1] if stock_value else 0
+        data['nb_products'] = stock_value[2] if stock_value else 0
+
+        # 3. Top 3 alertes critiques avec calcul de perte réelle
+        query_top_alerts = """
+            WITH predictions_7j AS (
+                SELECT
+                    product_id,
+                    SUM(predicted_quantity) as total_prevu
+                FROM forecasts
+                WHERE forecast_date BETWEEN date('now') AND date('now', '+7 days')
+                GROUP BY product_id
+            ),
+            ventes_moyennes AS (
+                SELECT
+                    product_id,
+                    AVG(quantity) as moy_ventes_jour
+                FROM sales_history
+                WHERE order_date >= date('now', '-7 days')
+                GROUP BY product_id
+            )
+            SELECT
+                p.name as produit,
+                CASE
+                    WHEN pred.total_prevu > sl.quantity_on_hand
+                    THEN (pred.total_prevu - sl.quantity_on_hand) * p.unit_price / 1000000
+                    ELSE 0
+                END as perte,
+                CASE
+                    WHEN COALESCE(vm.moy_ventes_jour, 0) > 0
+                    THEN sl.quantity_on_hand / vm.moy_ventes_jour
+                    ELSE 999
+                END as jours_restants
+            FROM alerts a
+            JOIN products p ON a.product_id = p.id
+            LEFT JOIN stock_levels sl ON sl.product_id = p.id
+            LEFT JOIN predictions_7j pred ON pred.product_id = p.id
+            LEFT JOIN ventes_moyennes vm ON vm.product_id = p.id
+            WHERE (a.severity = 'critical' OR a.severity = 'high')
+                AND a.status = 'active'
+            ORDER BY perte DESC
+            LIMIT 3
+        """
+        data['top_alerts'] = db.get_dataframe(query_top_alerts)
+
+        # 4. Prédictions semaine avec calcul valeur à commander
+        query_predictions = """
+            WITH predictions_vs_stock AS (
+                SELECT
+                    f.product_id,
+                    SUM(f.predicted_quantity) as total_prevu,
+                    sl.quantity_on_hand as stock_actuel,
+                    p.unit_price,
+                    a.severity
+                FROM forecasts f
+                JOIN products p ON f.product_id = p.id
+                LEFT JOIN stock_levels sl ON sl.product_id = p.id
+                LEFT JOIN alerts a ON a.product_id = p.id AND a.status = 'active'
+                WHERE f.forecast_date BETWEEN date('now') AND date('now', '+7 days')
+                GROUP BY f.product_id, sl.quantity_on_hand, p.unit_price, a.severity
+            )
+            SELECT
+                SUM(CASE WHEN severity = 'critical' OR severity = 'high' THEN 1 ELSE 0 END) as nb_critiques,
+                SUM(CASE WHEN severity = 'warning' OR severity = 'medium' THEN 1 ELSE 0 END) as nb_attention,
+                SUM(CASE
+                    WHEN total_prevu > stock_actuel
+                    THEN (total_prevu - stock_actuel) * unit_price
+                    ELSE 0
+                END) / 1000000 as valeur_a_commander
+            FROM predictions_vs_stock
+        """
+        pred_df = db.get_dataframe(query_predictions)
+        if pred_df is not None and not pred_df.empty:
+            data['nb_produits_critiques'] = int(pred_df['nb_critiques'].iloc[0] or 0)
+            data['nb_produits_attention'] = int(pred_df['nb_attention'].iloc[0] or 0)
+            data['valeur_a_commander'] = float(pred_df['valeur_a_commander'].iloc[0] or 0)
+        else:
+            data['nb_produits_critiques'] = 0
+            data['nb_produits_attention'] = 0
+            data['valeur_a_commander'] = 0
+
+        # 5. Commandes du jour et de la semaine
+        query_orders_today = """
+            SELECT
+                COUNT(DISTINCT id) as nb_commandes,
+                COALESCE(SUM(quantity_ordered * unit_price), 0) as montant_total
+            FROM orders
+            WHERE DATE(order_date) = DATE('now')
+        """
+        orders_today = db.execute_query(query_orders_today, fetch_all=False)
+        data['orders_today_count'] = orders_today[0] if orders_today else 0
+        data['orders_today_amount'] = orders_today[1] if orders_today else 0
+
+        query_orders_week = """
+            SELECT
+                COUNT(DISTINCT id) as nb_commandes,
+                COALESCE(SUM(quantity_ordered * unit_price), 0) as montant_total
+            FROM orders
+            WHERE DATE(order_date) >= DATE('now', '-7 days')
+        """
+        orders_week = db.execute_query(query_orders_week, fetch_all=False)
+        data['orders_week_count'] = orders_week[0] if orders_week else 0
+        data['orders_week_amount'] = orders_week[1] if orders_week else 0
+
+        # 6. Anomalies (remplacement de la précision système)
+        query_anomalies_stats = """
+            SELECT
+                COUNT(*) as total,
+                SUM(CASE WHEN status = 'validated' THEN 1 ELSE 0 END) as traitees
+            FROM anomalies
+        """
+        anomalies_result = db.execute_query(query_anomalies_stats, fetch_all=False)
+        if anomalies_result:
+            data['anomalies_total'] = anomalies_result[0] or 0
+            data['anomalies_traitees'] = anomalies_result[1] or 0
+            data['anomalies_pct'] = (anomalies_result[1] / anomalies_result[0] * 100) if anomalies_result[0] > 0 else 0
+        else:
+            data['anomalies_total'] = 0
+            data['anomalies_traitees'] = 0
+            data['anomalies_pct'] = 0
+
+        # 7. Anomalies en attente (pour le bouton Valider)
+        query_anomalies_pending = """
+            SELECT COUNT(*) as count
+            FROM anomalies
+            WHERE status = 'pending'
+        """
+        anomalies_pending = db.execute_query(query_anomalies_pending, fetch_all=False)
+        data['anomalies_pending'] = anomalies_pending[0] if anomalies_pending else 0
+
+        # 8. Évolution alertes critiques (7 derniers jours)
+        query_alerts_evolution = """
+            SELECT
+                DATE(created_at) as date,
+                COUNT(*) as nb_critiques
+            FROM alerts
+            WHERE (severity = 'critical' OR severity = 'high')
+                AND DATE(created_at) >= DATE('now', '-7 days')
+            GROUP BY DATE(created_at)
+            ORDER BY date
+        """
+        data['alerts_evolution'] = db.get_dataframe(query_alerts_evolution)
+
+        # 9. CA prévu vs réel (7 derniers jours PASSÉS)
+        # CA prévu = ce qu'on avait prédit pour les 7 derniers jours
+        query_ca_prevu = """
+            SELECT
+                DATE(f.forecast_date) as date,
+                SUM(f.predicted_quantity * p.unit_price) / 1000000 as ca_prevu
+            FROM forecasts f
+            JOIN products p ON f.product_id = p.id
+            WHERE f.forecast_date BETWEEN date('now', '-7 days') AND date('now', '-1 day')
+                AND f.created_at <= date('now', '-7 days')
+            GROUP BY DATE(f.forecast_date)
+        """
+        ca_prevu_df = db.get_dataframe(query_ca_prevu)
+
+        # CA réel = ventes effectivement réalisées sur les 7 derniers jours
+        query_ca_reel = """
+            SELECT
+                DATE(sh.order_date) as date,
+                SUM(sh.quantity * p.unit_price) / 1000000 as ca_reel
+            FROM sales_history sh
+            JOIN products p ON sh.product_id = p.id
+            WHERE sh.order_date BETWEEN date('now', '-7 days') AND date('now', '-1 day')
+            GROUP BY DATE(sh.order_date)
+        """
+        ca_reel_df = db.get_dataframe(query_ca_reel)
+
+        # Fusionner les deux DataFrames
+        if ca_prevu_df is not None and ca_reel_df is not None:
+            import pandas as pd
+            data['ca_comparison'] = pd.merge(
+                ca_prevu_df, ca_reel_df,
+                on='date', how='outer'
+            ).fillna(0).sort_values('date')
+        else:
+            data['ca_comparison'] = pd.DataFrame()
+
+        # Timestamp de dernière mise à jour
+        data['last_update'] = datetime.now()
+
+    except Exception as e:
+        st.error(f"Erreur chargement données : {e}")
+
+    return data
+
+def display_alert_counter(label, count, color):
+    """Affiche un compteur d'alerte coloré"""
+    return f'<div style="display: inline-block; margin: 0 10px; padding: 5px 10px; background-color: {color}; color: white; border-radius: 5px; font-weight: bold;">{label}: {count}</div>'
+
+def main():
+    # Charger les données
+    data = load_dashboard_data()
+
+    # ========== RANGÉE 1 : BANDEAU D'ÉTAT GLOBAL ==========
+    st.markdown("# 📊 OptiFlow Dashboard")
+
+    col1, col2, col3, col4, col5 = st.columns([2, 2, 2, 2, 2])
+
+    with col1:
+        # Compteurs d'alertes
+        alerts_counts = {'CRITIQUE': 0, 'ATTENTION': 0, 'OK': 0}
+        if 'alerts' in data and not data['alerts'].empty:
+            for _, row in data['alerts'].iterrows():
+                alerts_counts[row['niveau']] = row['count']
+
+        html_alerts = ""
+        html_alerts += display_alert_counter("🔴 Critiques", alerts_counts['CRITIQUE'], COLORS['CRITIQUE'])
+        html_alerts += display_alert_counter("🟡 Attention", alerts_counts['ATTENTION'], COLORS['ATTENTION'])
+        html_alerts += display_alert_counter("🟢 OK", alerts_counts['OK'], COLORS['OK'])
+        st.markdown(html_alerts, unsafe_allow_html=True)
+
+    with col2:
+        st.metric(
+            "💰 Valeur Stock Total",
+            f"{data.get('stock_value', 0):,.0f} M FCFA",
+            f"{data.get('stock_quantity', 0):.0f} unités"
+        )
+
+    with col3:
+        anomalies_traitees = data.get('anomalies_traitees', 0)
+        anomalies_total = data.get('anomalies_total', 0)
+        anomalies_pct = data.get('anomalies_pct', 0)
+        st.metric(
+            "🔍 Anomalies Traitées",
+            f"{anomalies_traitees}/{anomalies_total}",
+            f"{anomalies_pct:.0f}% traitées"
+        )
+
+    with col4:
+        st.metric(
+            "⏱️ Dernière MAJ",
+            data.get('last_update', datetime.now()).strftime("%H:%M"),
+            data.get('last_update', datetime.now()).strftime("%d/%m/%Y")
+        )
+
+    st.divider()
+
+    # ========== RANGÉE 2 : 4 MODULES D'ACTION ==========
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    # MODULE 1 : Top 3 Alertes Urgentes
+    with col1:
+        with st.container(border=True):
+            st.markdown("### 🚨 Top 3 Alertes Urgentes")
+
+            if 'top_alerts' in data and not data['top_alerts'].empty:
+                for idx, alert in data['top_alerts'].iterrows():
+                    st.markdown(f"**{alert['produit']}**")
+                    col_a, col_b = st.columns(2)
+                    with col_a:
+                        if alert['perte'] > 0:
+                            st.caption(f"Perte: {alert['perte']:,.1f} M")
+                        else:
+                            st.caption("Stock suffisant")
+                    with col_b:
+                        if alert['jours_restants'] < 999:
+                            st.caption(f"Rupture: {alert['jours_restants']:.0f}j")
+                        else:
+                            st.caption("Stock dormant")
+                    if idx < len(data['top_alerts']) - 1:
+                        st.divider()
+            else:
+                st.success("✅ Aucune alerte critique")
+
+            if st.button("→ Toutes alertes", key="btn_alertes", use_container_width=True):
+                st.switch_page("pages/alertes.py")
+
+    # MODULE 2 : Prédictions Semaine
+    with col2:
+        with st.container(border=True):
+            st.markdown("### 📈 Prédictions Semaine")
+
+            nb_critiques = data.get('nb_produits_critiques', 0)
+            nb_attention = data.get('nb_produits_attention', 0)
+            valeur_commander = data.get('valeur_a_commander', 0)
+
+            # Afficher les alertes par statut
+            if nb_critiques > 0 or nb_attention > 0:
+                st.warning(f"⚠️ {nb_critiques} produits critiques, {nb_attention} attention")
+            else:
+                st.success("✅ Stocks suffisants")
+
+            # Afficher la valeur à commander (info actionnable)
+            st.markdown("**💰 À COMMANDER:**")
+            if valeur_commander > 100:
+                st.error(f"{valeur_commander:,.1f} M FCFA")
+            elif valeur_commander > 50:
+                st.warning(f"{valeur_commander:,.1f} M FCFA")
+            else:
+                st.success(f"{valeur_commander:,.1f} M FCFA")
+
+            st.caption("(valeur des manques uniquement)")
+
+            if st.button("→ Détails produits", key="btn_predictions", use_container_width=True):
+                st.switch_page("pages/predictions.py")
+
+    # MODULE 3 : Commandes du Jour
+    with col3:
+        with st.container(border=True):
+            st.markdown("### 📦 Commandes")
+
+            # Aujourd'hui
+            st.markdown("**Aujourd'hui**")
+            col_a, col_b = st.columns(2)
+            with col_a:
+                st.metric("Nombre", f"{data.get('orders_today_count', 0)}")
+            with col_b:
+                st.metric("Montant", f"{data.get('orders_today_amount', 0):,.0f} FCFA")
+
+            st.divider()
+
+            # Cette semaine
+            st.markdown("**Cette semaine**")
+            col_a, col_b = st.columns(2)
+            with col_a:
+                st.metric("Nombre", f"{data.get('orders_week_count', 0)}")
+            with col_b:
+                st.metric("Total", f"{data.get('orders_week_amount', 0):,.0f} FCFA")
+
+            if st.button("→ Historique", key="btn_orders", use_container_width=True):
+                st.info("Coming soon")
+
+    # MODULE 4 : Amélioration Système
+    with col4:
+        with st.container(border=True):
+            st.markdown("### 🔧 Amélioration Système")
+
+            precision = data.get('precision', 85)
+            trend = data.get('precision_trend', 0)
+
+            # Statistiques anomalies
+            anomalies_traitees = data.get('anomalies_traitees', 0)
+            anomalies_total = data.get('anomalies_total', 0)
+            anomalies_pct = data.get('anomalies_pct', 0)
+
+            # Barre de progression
+            st.progress(anomalies_pct / 100, text=f"Progression: {anomalies_pct:.0f}%")
+
+            # Détails
+            st.metric("Traitées", f"{anomalies_traitees}/{anomalies_total}")
+
+            # Anomalies en attente
+            anomalies_pending = data.get('anomalies_pending', 0)
+            if anomalies_pending > 0:
+                st.warning(f"⚠️ {anomalies_pending} en attente de validation")
+            else:
+                st.success("✅ Toutes à jour")
+
+            if st.button("→ Valider", key="btn_amelioration", use_container_width=True):
+                st.switch_page("pages/amelioration.py")
+
+    st.divider()
+
+    # ========== RANGÉE 3 : GRAPHIQUES DE TENDANCE ==========
+
+    col1, col2 = st.columns(2)
+
+    # GRAPHIQUE 1 : Évolution des alertes critiques
+    with col1:
+        st.markdown("### 📉 Évolution Alertes Critiques (7 jours)")
+
+        if 'alerts_evolution' in data and not data['alerts_evolution'].empty:
+            df_alerts = data['alerts_evolution']
+
+            # Compléter les jours manquants
+            date_range = pd.date_range(
+                start=(datetime.now() - timedelta(days=7)).date(),
+                end=datetime.now().date(),
+                freq='D'
+            )
+            df_complete = pd.DataFrame({'date': date_range})
+            df_complete['date'] = df_complete['date'].astype(str)
+            df_alerts['date'] = df_alerts['date'].astype(str)
+            df_merged = df_complete.merge(df_alerts, on='date', how='left')
+            df_merged['nb_critiques'] = df_merged['nb_critiques'].fillna(0)
+
+            # Créer le graphique
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=df_merged['date'],
+                y=df_merged['nb_critiques'],
+                mode='lines+markers',
+                name='Alertes critiques',
+                line=dict(color=COLORS['CRITIQUE'], width=3),
+                marker=dict(size=8)
+            ))
+
+            # Mettre en évidence aujourd'hui
+            today_idx = len(df_merged) - 1
+            if today_idx >= 0:
+                fig.add_trace(go.Scatter(
+                    x=[df_merged.iloc[today_idx]['date']],
+                    y=[df_merged.iloc[today_idx]['nb_critiques']],
+                    mode='markers',
+                    name="Aujourd'hui",
+                    marker=dict(size=12, color='yellow', line=dict(width=2, color='black'))
+                ))
+
+            fig.update_layout(
+                xaxis_title="Date",
+                yaxis_title="Nombre d'alertes",
+                height=300,
+                showlegend=False,
+                hovermode='x unified'
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("Pas de données disponibles")
+
+    # GRAPHIQUE 2 : CA prévu vs réel
+    with col2:
+        st.markdown("### 💰 CA Prévu vs Réel (7 jours cumulés)")
+
+        if 'ca_comparison' in data and not data['ca_comparison'].empty:
+            df_ca = data['ca_comparison']
+
+            # Calculer les totaux (déjà en millions)
+            total_prevu = df_ca['ca_prevu'].sum()
+            total_reel = df_ca['ca_reel'].sum()
+            ecart_pct = ((total_reel - total_prevu) / total_prevu * 100) if total_prevu > 0 else 0
+            ecart_val = total_reel - total_prevu
+
+            # Créer le graphique à barres horizontales
+            fig = go.Figure()
+
+            fig.add_trace(go.Bar(
+                x=[total_prevu],
+                y=['CA Prévu'],
+                orientation='h',
+                name='Prévu',
+                marker_color='lightblue',
+                text=f"{total_prevu:,.1f} M FCFA",
+                textposition='inside'
+            ))
+
+            fig.add_trace(go.Bar(
+                x=[total_reel],
+                y=['CA Réel'],
+                orientation='h',
+                name='Réel',
+                marker_color='green' if total_reel >= total_prevu else 'orange',
+                text=f"{total_reel:,.1f} M FCFA",
+                textposition='inside'
+            ))
+
+            fig.update_layout(
+                xaxis_title="Montant (FCFA)",
+                height=250,
+                showlegend=False,
+                barmode='group'
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
+            # Afficher l'écart
+            if ecart_val >= 0:
+                st.success(f"📈 Écart: +{ecart_val:,.1f} M FCFA ({ecart_pct:+.1f}%)")
+            else:
+                st.warning(f"📉 Écart: {ecart_val:,.1f} M FCFA ({ecart_pct:.1f}%)")
+        else:
+            st.info("Pas de données disponibles")
+
+    # Bouton de rafraîchissement
+    col1, col2, col3 = st.columns([4, 1, 1])
+    with col3:
+        if st.button("🔄 Actualiser", key="refresh_dashboard"):
+            st.cache_data.clear()
+            st.rerun()
+
+if __name__ == "__main__":
+    main()

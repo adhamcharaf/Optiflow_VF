@@ -1,0 +1,14 @@
+{
+  "product_id": 11,
+  "product_name": "Hotte Aspirante",
+  "train_size": 877,
+  "test_size": 219,
+  "mape": 9.38,
+  "trained_at": "2025-09-10T02:54:18.137041",
+  "data_range": {
+    "start": "2022-01-01",
+    "end": "2024-05-26"
+  },
+  "has_events": true,
+  "performance_grade": "A"
+}

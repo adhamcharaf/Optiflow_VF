@@ -1,0 +1,14 @@
+{
+  "product_id": 7,
+  "product_name": "D\u00e9shumidificateur",
+  "train_size": 877,
+  "test_size": 219,
+  "mape": 13.45,
+  "trained_at": "2025-09-10T02:54:16.578466",
+  "data_range": {
+    "start": "2022-01-01",
+    "end": "2024-05-26"
+  },
+  "has_events": true,
+  "performance_grade": "B"
+}

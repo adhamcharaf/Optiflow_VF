@@ -1,0 +1,14 @@
+{
+  "product_id": 5,
+  "product_name": "Machine \u00e0 Laver 7kg",
+  "train_size": 877,
+  "test_size": 219,
+  "mape": 10.38,
+  "trained_at": "2025-09-10T02:54:15.795261",
+  "data_range": {
+    "start": "2022-01-01",
+    "end": "2024-05-26"
+  },
+  "has_events": true,
+  "performance_grade": "B"
+}

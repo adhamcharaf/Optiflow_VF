@@ -1,0 +1,11 @@
+{
+  "training_summary": {
+    "total_products": 12,
+    "successful_trainings": 0,
+    "failed_trainings": 12,
+    "success_rate": 0.0
+  },
+  "performance_stats": [],
+  "global_mape": 0,
+  "trained_at": "2025-09-10T02:52:42.600073"
+}

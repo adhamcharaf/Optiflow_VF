@@ -1,0 +1,14 @@
+{
+  "product_id": 2,
+  "product_name": "R\u00e9frig\u00e9rateur Double Porte 350L",
+  "train_size": 877,
+  "test_size": 219,
+  "mape": 11.59,
+  "trained_at": "2025-09-10T02:54:14.577761",
+  "data_range": {
+    "start": "2022-01-01",
+    "end": "2024-05-26"
+  },
+  "has_events": true,
+  "performance_grade": "B"
+}

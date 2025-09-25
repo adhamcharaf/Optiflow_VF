@@ -1,0 +1,14 @@
+{
+  "product_id": 12,
+  "product_name": "Chauffe-eau \u00c9lectrique",
+  "train_size": 877,
+  "test_size": 219,
+  "mape": 13.15,
+  "trained_at": "2025-09-10T02:54:18.511091",
+  "data_range": {
+    "start": "2022-01-01",
+    "end": "2024-05-26"
+  },
+  "has_events": true,
+  "performance_grade": "B"
+}

@@ -1,0 +1,14 @@
+{
+  "product_id": 9,
+  "product_name": "Cave \u00e0 Vin 12 Bouteilles",
+  "train_size": 877,
+  "test_size": 219,
+  "mape": 12.15,
+  "trained_at": "2025-09-10T02:54:17.359202",
+  "data_range": {
+    "start": "2022-01-01",
+    "end": "2024-05-26"
+  },
+  "has_events": true,
+  "performance_grade": "B"
+}

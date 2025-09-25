@@ -1,0 +1,358 @@
+"""
+Page 3 - Prédictions et Amélioration Continue
+Système de validation des anomalies et calcul du MAPE propre
+"""
+
+import streamlit as st
+import pandas as pd
+import sys
+from pathlib import Path
+from datetime import datetime, timedelta
+import subprocess
+import plotly.graph_objects as go
+
+# Ajouter les chemins nécessaires
+sys.path.append(str(Path(__file__).parent.parent.parent))
+sys.path.append(str(Path(__file__).parent.parent.parent / "scripts_ml"))
+
+# Import du détecteur d'anomalies Prophet
+from scripts_ml.prophet_anomaly_detector import ProphetAnomalyDetector
+
+# Configuration de la page
+st.set_page_config(
+    page_title="Optiflow - Prédictions",
+    page_icon="📈",
+    layout="wide"
+)
+
+# Titre principal
+st.title("📈 Prédictions et Amélioration Continue")
+st.markdown("---")
+
+# Initialiser le détecteur - PAS DE CACHE pour éviter les problèmes de synchronisation
+def get_detector():
+    return ProphetAnomalyDetector()
+
+detector = get_detector()
+
+# Section principale : Métriques MAPE
+col1, col2, col3 = st.columns([2, 2, 1])
+
+with col1:
+    # Calculer le MAPE propre
+    mape_stats = detector.calculate_clean_mape()
+
+    # Afficher la métrique principale
+    st.metric(
+        label="🎯 MAPE Propre",
+        value=f"{mape_stats['clean_mape']}%",
+        delta=f"-{mape_stats['improvement']}%" if mape_stats['improvement'] > 0 else None,
+        help="Mesure de précision excluant les anomalies validées comme exceptionnelles"
+    )
+
+    # Description du MAPE
+    st.caption("""
+    📊 **MAPE (Mean Absolute Percentage Error)** : Mesure la précision moyenne
+    des prédictions. Plus le % est bas, plus les prédictions sont précises.
+    """)
+
+with col2:
+    if mape_stats['improvement_percent'] > 0:
+        st.metric(
+            label="📈 Amélioration",
+            value=f"+{mape_stats['improvement_percent']}%",
+            delta="depuis dernière action",
+            help="Amélioration du MAPE après exclusion des anomalies"
+        )
+    else:
+        st.info("Validez des anomalies pour voir l'amélioration")
+
+with col3:
+    st.metric(
+        label="🔍 Anomalies exclues",
+        value=mape_stats['anomalies_excluded'],
+        help="Nombre d'anomalies marquées comme exceptionnelles"
+    )
+
+st.markdown("---")
+
+# Section de détection manuelle
+col_left, col_right = st.columns([3, 1])
+
+with col_left:
+    st.subheader("🔄 Lancement de la Détection")
+
+with col_right:
+    if st.button("🔄 Relancer détection", type="primary", use_container_width=True):
+        with st.spinner("Détection en cours... (cela peut prendre quelques minutes)"):
+            # Enregistrer le MAPE actuel comme référence
+            detector.track_improvement()
+
+            # Lancer la détection
+            end_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+            result = detector.detect_historical_anomalies(
+                start_date="2022-01-01",
+                end_date=end_date
+            )
+
+            if result['success']:
+                st.success(f"✅ Détection terminée : {result['anomalies_detected']} anomalies trouvées")
+                st.rerun()
+            else:
+                st.error(f"❌ Erreur : {result.get('error', 'Erreur inconnue')}")
+
+# Section de validation des anomalies
+st.subheader("🎯 Anomalies à Valider")
+
+# Récupérer les anomalies en attente
+pending_anomalies = detector.get_pending_anomalies(limit=20)
+
+if pending_anomalies:
+    # Créer un DataFrame pour l'affichage
+    df_anomalies = pd.DataFrame(pending_anomalies)
+
+    # Formater les colonnes
+    df_anomalies['deviation_percent'] = df_anomalies['deviation_percent'].round(1)
+    df_anomalies['predicted_value'] = df_anomalies['predicted_value'].round(1)
+    df_anomalies['actual_value'] = df_anomalies['actual_value'].round(1)
+
+    # Ajouter une colonne d'écart visuel
+    df_anomalies['Écart'] = df_anomalies.apply(
+        lambda x: f"{'📈' if x['anomaly_type'] == 'spike' else '📉'} {x['deviation_percent']}%",
+        axis=1
+    )
+
+    # Colonnes à afficher
+    display_columns = ['detection_date', 'product_name', 'predicted_value',
+                      'actual_value', 'Écart', 'severity']
+
+    # Renommer les colonnes pour l'affichage
+    column_names = {
+        'detection_date': 'Date',
+        'product_name': 'Produit',
+        'predicted_value': 'Prédit',
+        'actual_value': 'Réel',
+        'severity': 'Sévérité'
+    }
+
+    # Afficher le tableau avec sélection
+    st.info(f"📊 {len(pending_anomalies)} anomalies en attente de validation")
+
+    # Créer des onglets pour les actions
+    tab1, tab2 = st.tabs(["🔍 Validation individuelle", "⚡ Actions groupées"])
+
+    with tab1:
+        # Sélection d'une anomalie
+        selected_idx = st.selectbox(
+            "Sélectionner une anomalie:",
+            range(len(df_anomalies)),
+            format_func=lambda x: f"{df_anomalies.iloc[x]['detection_date']} - {df_anomalies.iloc[x]['product_name']} ({df_anomalies.iloc[x]['Écart']})"
+        )
+
+        if selected_idx is not None:
+            selected_anomaly = df_anomalies.iloc[selected_idx]
+
+            # Afficher les détails
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Prédit", f"{selected_anomaly['predicted_value']:.0f}")
+            with col2:
+                st.metric("Réel", f"{selected_anomaly['actual_value']:.0f}")
+            with col3:
+                st.metric("Écart", selected_anomaly['Écart'])
+
+            # Boutons d'action
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                if st.button("✅ Valider", key=f"validate_{selected_anomaly['id']}", use_container_width=True):
+                    try:
+                        if detector.update_anomaly_status(selected_anomaly['id'], 'validated'):
+                            st.success("Anomalie validée")
+                            st.cache_data.clear()  # Vider le cache
+                            st.rerun()
+                        else:
+                            st.error("Erreur lors de la validation")
+                    except Exception as e:
+                        st.error(f"Erreur: {str(e)}")
+
+            with col2:
+                if st.button("❌ Ignorer", key=f"ignore_{selected_anomaly['id']}", use_container_width=True,
+                           help="Marquer comme événement exceptionnel (exclu du MAPE)"):
+                    try:
+                        if detector.update_anomaly_status(selected_anomaly['id'], 'ignored'):
+                            st.success("Anomalie ignorée - MAPE recalculé")
+                            st.cache_data.clear()  # Vider le cache
+                            st.rerun()
+                        else:
+                            st.error("Erreur lors de l'ignorance")
+                    except Exception as e:
+                        st.error(f"Erreur: {str(e)}")
+
+            with col3:
+                if st.button("🔄 Saisonnier", key=f"seasonal_{selected_anomaly['id']}", use_container_width=True,
+                           help="Marquer comme pattern récurrent"):
+                    try:
+                        if detector.update_anomaly_status(selected_anomaly['id'], 'seasonal'):
+                            st.success("Marqué comme saisonnier")
+                            st.cache_data.clear()  # Vider le cache
+                            st.rerun()
+                        else:
+                            st.error("Erreur lors du marquage saisonnier")
+                    except Exception as e:
+                        st.error(f"Erreur: {str(e)}")
+
+    with tab2:
+        st.write("Actions rapides sur plusieurs anomalies:")
+
+        # Filtres pour actions groupées
+        severity_filter = st.multiselect(
+            "Filtrer par sévérité:",
+            options=['low', 'medium', 'high', 'critical'],
+            default=['high', 'critical']
+        )
+
+        filtered_df = df_anomalies[df_anomalies['severity'].isin(severity_filter)] if severity_filter else df_anomalies
+
+        st.dataframe(
+            filtered_df[display_columns].rename(columns=column_names),
+            hide_index=True,
+            use_container_width=True
+        )
+
+        # Actions groupées
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            if st.button("✅ Valider toutes (filtrées)", use_container_width=True):
+                try:
+                    count = 0
+                    errors = 0
+                    for _, row in filtered_df.iterrows():
+                        try:
+                            if detector.update_anomaly_status(row['id'], 'validated'):
+                                count += 1
+                        except Exception as e:
+                            errors += 1
+                            logger.error(f"Erreur validation ID {row['id']}: {e}")
+
+                    if count > 0:
+                        st.success(f"{count} anomalies validées")
+                    if errors > 0:
+                        st.warning(f"{errors} erreurs rencontrées")
+
+                    st.cache_data.clear()
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erreur globale: {str(e)}")
+
+        with col2:
+            if st.button("❌ Ignorer toutes (filtrées)", use_container_width=True):
+                try:
+                    count = 0
+                    errors = 0
+                    for _, row in filtered_df.iterrows():
+                        try:
+                            if detector.update_anomaly_status(row['id'], 'ignored'):
+                                count += 1
+                        except Exception as e:
+                            errors += 1
+                            logger.error(f"Erreur ignorance ID {row['id']}: {e}")
+
+                    if count > 0:
+                        st.success(f"{count} anomalies ignorées")
+                    if errors > 0:
+                        st.warning(f"{errors} erreurs rencontrées")
+
+                    st.cache_data.clear()
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erreur globale: {str(e)}")
+
+        with col3:
+            if st.button("🔄 Toutes saisonnières", use_container_width=True):
+                try:
+                    count = 0
+                    errors = 0
+                    for _, row in filtered_df.iterrows():
+                        try:
+                            if detector.update_anomaly_status(row['id'], 'seasonal'):
+                                count += 1
+                        except Exception as e:
+                            errors += 1
+                            logger.error(f"Erreur saisonnier ID {row['id']}: {e}")
+
+                    if count > 0:
+                        st.success(f"{count} anomalies marquées saisonnières")
+                    if errors > 0:
+                        st.warning(f"{errors} erreurs rencontrées")
+
+                    st.cache_data.clear()
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erreur globale: {str(e)}")
+
+else:
+    st.success("✅ Aucune anomalie en attente de validation")
+    st.info("""
+    💡 **Pour détecter de nouvelles anomalies:**
+    1. Cliquez sur "🔄 Relancer détection" ci-dessus
+    2. Ou exécutez le script: `python scripts_ml/initialize_prophet_anomalies.py`
+    """)
+
+# Section d'historique
+with st.expander("📊 Historique des validations"):
+    import sqlite3
+
+    conn = sqlite3.connect("optiflow.db")
+
+    # Récupérer l'historique des anomalies traitées
+    query = """
+    SELECT
+        detection_date,
+        p.name as product_name,
+        predicted_value,
+        actual_value,
+        deviation_percent,
+        anomaly_type,
+        status,
+        a.created_at
+    FROM anomalies a
+    JOIN products p ON a.product_id = p.id
+    WHERE status != 'pending'
+    ORDER BY a.created_at DESC
+    LIMIT 50
+    """
+
+    df_history = pd.read_sql_query(query, conn)
+    conn.close()
+
+    if not df_history.empty:
+        # Ajouter des icônes pour le statut
+        status_icons = {
+            'validated': '✅',
+            'ignored': '❌',
+            'seasonal': '🔄'
+        }
+        df_history['Status'] = df_history['status'].map(lambda x: f"{status_icons.get(x, '')} {x}")
+
+        # Formater les colonnes
+        df_history['deviation_percent'] = df_history['deviation_percent'].round(1)
+
+        st.dataframe(
+            df_history[['detection_date', 'product_name', 'predicted_value',
+                       'actual_value', 'deviation_percent', 'Status']],
+            hide_index=True,
+            use_container_width=True
+        )
+    else:
+        st.info("Aucun historique de validation")
+
+# Footer avec informations
+st.markdown("---")
+st.caption("""
+**Légende des actions:**
+- ✅ **Valider** : L'anomalie est normale, la garder pour l'entraînement
+- ❌ **Ignorer** : Événement exceptionnel, exclure du calcul MAPE
+- 🔄 **Saisonnier** : Pattern récurrent (Noël, soldes, etc.)
+""")

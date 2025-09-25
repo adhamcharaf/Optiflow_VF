@@ -1,0 +1,14 @@
+{
+  "product_id": 10,
+  "product_name": "Cuisini\u00e8re 4 Feux",
+  "train_size": 877,
+  "test_size": 219,
+  "mape": 10.89,
+  "trained_at": "2025-09-10T02:54:17.745540",
+  "data_range": {
+    "start": "2022-01-01",
+    "end": "2024-05-26"
+  },
+  "has_events": true,
+  "performance_grade": "B"
+}

@@ -1,0 +1,84 @@
+{
+  "training_summary": {
+    "total_products": 12,
+    "successful_trainings": 12,
+    "failed_trainings": 0,
+    "success_rate": 100.0
+  },
+  "performance_stats": [
+    {
+      "product_id": 1,
+      "product_name": "Climatiseur Split 12000 BTU",
+      "mape": 14.91,
+      "grade": "B"
+    },
+    {
+      "product_id": 2,
+      "product_name": "R\u00e9frig\u00e9rateur Double Porte 350L",
+      "mape": 11.59,
+      "grade": "B"
+    },
+    {
+      "product_id": 3,
+      "product_name": "Cong\u00e9lateur Horizontal 300L",
+      "mape": 10.32,
+      "grade": "B"
+    },
+    {
+      "product_id": 4,
+      "product_name": "Ventilateur Tour",
+      "mape": 22.8,
+      "grade": "C"
+    },
+    {
+      "product_id": 5,
+      "product_name": "Machine \u00e0 Laver 7kg",
+      "mape": 10.38,
+      "grade": "B"
+    },
+    {
+      "product_id": 6,
+      "product_name": "Micro-ondes 25L",
+      "mape": 10.78,
+      "grade": "B"
+    },
+    {
+      "product_id": 7,
+      "product_name": "D\u00e9shumidificateur",
+      "mape": 13.45,
+      "grade": "B"
+    },
+    {
+      "product_id": 8,
+      "product_name": "Purificateur d'Air",
+      "mape": 11.68,
+      "grade": "B"
+    },
+    {
+      "product_id": 9,
+      "product_name": "Cave \u00e0 Vin 12 Bouteilles",
+      "mape": 12.15,
+      "grade": "B"
+    },
+    {
+      "product_id": 10,
+      "product_name": "Cuisini\u00e8re 4 Feux",
+      "mape": 10.89,
+      "grade": "B"
+    },
+    {
+      "product_id": 11,
+      "product_name": "Hotte Aspirante",
+      "mape": 9.38,
+      "grade": "A"
+    },
+    {
+      "product_id": 12,
+      "product_name": "Chauffe-eau \u00c9lectrique",
+      "mape": 13.15,
+      "grade": "B"
+    }
+  ],
+  "global_mape": 12.623333333333333,
+  "trained_at": "2025-09-10T02:54:18.533336"
+}

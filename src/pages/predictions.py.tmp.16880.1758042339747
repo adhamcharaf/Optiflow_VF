@@ -1,0 +1,328 @@
+"""
+Page Prédictions - Optiflow MVP
+Affichage des prédictions de ventes futures
+"""
+
+import streamlit as st
+import pandas as pd
+import sqlite3
+import plotly.graph_objects as go
+from datetime import datetime, timedelta
+import os
+import subprocess
+import sys
+
+# Configuration de la page
+st.set_page_config(
+    page_title="Optiflow - Prédictions",
+    page_icon=":material/trending_up:",
+    layout="wide"
+)
+
+# Titre principal
+st.title(":material/trending_up: Prédictions de Ventes")
+st.markdown("---")
+
+# Fonctions de base de données
+@st.cache_data(ttl=300)  # Cache 5 minutes
+def get_products():
+    """Récupère la liste des produits"""
+    db_path = os.path.join(os.path.dirname(__file__), '..', '..', 'optiflow.db')
+    conn = sqlite3.connect(db_path)
+    query = "SELECT id, name FROM products ORDER BY name"
+    df = pd.read_sql_query(query, conn)
+    conn.close()
+    return df
+
+@st.cache_data(ttl=300)
+def get_predictions(product_id, days):
+    """Récupère les prédictions pour un produit et une période"""
+    db_path = os.path.join(os.path.dirname(__file__), '..', '..', 'optiflow.db')
+    conn = sqlite3.connect(db_path)
+
+    # Date de début (aujourd'hui) et date de fin
+    start_date = datetime.now().date()
+    end_date = start_date + timedelta(days=days)
+
+    query = """
+        SELECT
+            forecast_date,
+            predicted_quantity,
+            lower_bound,
+            upper_bound
+        FROM forecasts
+        WHERE product_id = ?
+            AND forecast_date >= ?
+            AND forecast_date <= ?
+        ORDER BY forecast_date
+    """
+
+    df = pd.read_sql_query(query, conn, params=[product_id, start_date, end_date])
+    conn.close()
+
+    if not df.empty:
+        df['forecast_date'] = pd.to_datetime(df['forecast_date'])
+
+    return df
+
+def get_current_stock(product_id):
+    """Récupère le stock actuel d'un produit"""
+    db_path = os.path.join(os.path.dirname(__file__), '..', '..', 'optiflow.db')
+    conn = sqlite3.connect(db_path)
+
+    query = """
+        SELECT quantity_on_hand
+        FROM stock_levels
+        WHERE product_id = ?
+        ORDER BY recorded_at DESC
+        LIMIT 1
+    """
+
+    cursor = conn.cursor()
+    cursor.execute(query, [product_id])
+    result = cursor.fetchone()
+    conn.close()
+
+    return result[0] if result else 0
+
+# MODULE 1 : SÉLECTEUR DE CONTRÔLE
+st.markdown("### :material/settings: Paramètres de visualisation")
+
+col1, col2 = st.columns([3, 2])
+
+# Récupérer la liste des produits
+products_df = get_products()
+
+if products_df.empty:
+    st.error(":material/warning: Aucun produit disponible dans la base de données")
+    st.stop()
+
+with col1:
+    # Créer un dictionnaire pour le selectbox
+    product_options = {row['id']: row['name'] for _, row in products_df.iterrows()}
+    selected_product_id = st.selectbox(
+        "Sélectionner un produit",
+        options=list(product_options.keys()),
+        format_func=lambda x: product_options[x],
+        key="product_selector"
+    )
+
+with col2:
+    # Sélection de la période
+    period_days = st.radio(
+        "Période de prédiction",
+        options=[7, 14, 30],
+        format_func=lambda x: f"{x} jours",
+        horizontal=True,
+        key="period_selector"
+    )
+
+# Bouton actualiser déplacé en bas de page
+
+st.markdown("---")
+
+# Récupérer les données
+predictions_df = get_predictions(selected_product_id, period_days)
+current_stock = get_current_stock(selected_product_id)
+
+if predictions_df.empty:
+    st.warning(f":material/info: Pas de prédictions disponibles pour {product_options[selected_product_id]} sur {period_days} jours")
+    st.stop()
+
+# MODULE 2 : GRAPHIQUE DE PRÉDICTIONS
+st.markdown("### :material/show_chart: Visualisation des prédictions")
+
+# Créer le graphique avec Plotly
+fig = go.Figure()
+
+# Ajouter la ligne de prédiction principale
+fig.add_trace(go.Scatter(
+    x=predictions_df['forecast_date'],
+    y=predictions_df['predicted_quantity'],
+    mode='lines+markers',
+    name='Prédiction',
+    line=dict(color='blue', width=2),
+    marker=dict(size=6),
+    hovertemplate='<b>Date:</b> %{x|%d/%m/%Y}<br>' +
+                  '<b>Quantité prédite:</b> %{y:.1f}<br>' +
+                  '<extra></extra>'
+))
+
+# Ajouter la zone de confiance si disponible
+if 'lower_bound' in predictions_df.columns and 'upper_bound' in predictions_df.columns:
+    # Limite supérieure
+    fig.add_trace(go.Scatter(
+        x=predictions_df['forecast_date'],
+        y=predictions_df['upper_bound'],
+        mode='lines',
+        name='Limite supérieure',
+        line=dict(color='rgba(0,100,255,0)', width=0),
+        showlegend=False,
+        hoverinfo='skip'
+    ))
+
+    # Limite inférieure avec remplissage
+    fig.add_trace(go.Scatter(
+        x=predictions_df['forecast_date'],
+        y=predictions_df['lower_bound'],
+        mode='lines',
+        name='Zone de confiance',
+        line=dict(color='rgba(0,100,255,0)', width=0),
+        fill='tonexty',
+        fillcolor='rgba(0,100,255,0.2)',
+        hoverinfo='skip'
+    ))
+
+# Configuration du layout
+fig.update_layout(
+    title=f"Prédictions pour {product_options[selected_product_id]}",
+    xaxis_title="Date",
+    yaxis_title="Quantité (unités)",
+    hovermode='x unified',
+    height=400,
+    showlegend=True,
+    legend=dict(
+        orientation="h",
+        yanchor="bottom",
+        y=1.02,
+        xanchor="right",
+        x=1
+    )
+)
+
+# Afficher le graphique
+st.plotly_chart(fig, use_container_width=True)
+
+# MODULE 3 : TABLEAU RÉCAPITULATIF
+st.markdown("### :material/summarize: Résumé et analyse")
+
+# Vérifier que les données existent
+if not predictions_df.empty:
+    # Calculs pour le résumé
+    predictions_df['day_of_week'] = predictions_df['forecast_date'].dt.dayofweek
+
+    # Séparer jours ouvrés (0-4) et weekend (5-6)
+    weekday_total = predictions_df[predictions_df['day_of_week'] < 5]['predicted_quantity'].sum()
+    weekend_total = predictions_df[predictions_df['day_of_week'] >= 5]['predicted_quantity'].sum()
+    total_predicted = predictions_df['predicted_quantity'].sum()
+
+    # Calcul du statut et besoin
+    stock_sufficient = current_stock >= total_predicted
+    need_to_order = max(0, total_predicted - current_stock)
+
+    # Utiliser un container avec bordure pour mieux visualiser
+    with st.container(border=True):
+        # Créer deux colonnes pour le résumé
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown(f"**RÉSUMÉ PRÉDICTIONS ({period_days} jours)**")
+            st.markdown("---")
+            st.metric("Jours ouvrés (Lun-Ven)", f"{weekday_total:.0f} unités")
+            st.metric("Weekend (Sam-Dim)", f"{weekend_total:.0f} unités")
+            st.markdown("---")
+            st.metric("**TOTAL PÉRIODE**", f"{total_predicted:.0f} unités")
+
+        with col2:
+            st.markdown("**SITUATION DU STOCK**")
+            st.markdown("---")
+            st.metric("Stock actuel", f"{current_stock:.0f} unités")
+
+            # Statut avec couleur
+            if stock_sufficient:
+                st.success(f":material/check_circle: Stock suffisant")
+            else:
+                st.error(f":material/error: Stock insuffisant")
+
+            st.markdown("---")
+
+            # Besoin de commande
+            if need_to_order > 0:
+                st.warning(f":material/shopping_cart: **Commander : {need_to_order:.0f} unités**")
+            else:
+                st.info(":material/inventory_2: Pas de commande nécessaire")
+else:
+    st.info("Aucune donnée de prédiction disponible pour la période sélectionnée.")
+
+# Informations complémentaires
+with st.expander(":material/info: Informations détaillées"):
+    st.markdown(f"""
+    - **Produit analysé :** {product_options[selected_product_id]}
+    - **Période d'analyse :** {period_days} jours
+    - **Nombre de prédictions :** {len(predictions_df)} jours
+    - **Moyenne journalière :** {(total_predicted / len(predictions_df)):.1f} unités/jour
+    - **Stock actuel :** {current_stock:.0f} unités
+    - **Couverture stock :** {(current_stock / (total_predicted / period_days)):.1f} jours (si ventes constantes)
+    """)
+
+# Section bouton actualisation des modèles
+st.markdown("---")
+col_empty, col_button = st.columns([3, 1])
+
+with col_button:
+    # Utiliser session state pour gérer la confirmation
+    if 'show_update_warning' not in st.session_state:
+        st.session_state.show_update_warning = False
+
+    if st.button(":material/model_training: Actualiser les modèles",
+                 use_container_width=True,
+                 type="secondary",
+                 help="Régénère les prédictions pour les 30 prochains jours avec les dernières données"):
+        st.session_state.show_update_warning = True
+
+# Zone d'avertissement et confirmation
+if st.session_state.get('show_update_warning', False):
+    with st.container():
+        st.markdown("---")
+        st.warning(":material/schedule: **Confirmation requise**")
+        st.markdown("""
+        Cette opération va :
+        - Régénérer toutes les prédictions sur 30 jours
+        - Intégrer les dernières données de ventes
+        - Prendre en compte les anomalies validées
+
+        **⏱️ Durée estimée : 1-3 minutes selon le volume de données**
+        """)
+
+        col1, col2, col3 = st.columns([1, 1, 2])
+        with col1:
+            if st.button(":material/check: Confirmer", type="primary", use_container_width=True):
+                st.session_state.show_update_warning = False
+                execute_update = True
+            else:
+                execute_update = False
+        with col2:
+            if st.button(":material/close: Annuler", use_container_width=True):
+                st.session_state.show_update_warning = False
+                execute_update = False
+
+        if 'execute_update' in locals() and execute_update:
+            with st.spinner("Mise à jour des modèles en cours... Cela peut prendre quelques minutes."):
+
+                # Chemin vers le script
+                script_path = os.path.join(os.path.dirname(__file__), '..', '..', 'scripts_ml', 'weekly_predictions_update.py')
+                db_path = os.path.join(os.path.dirname(__file__), '..', '..', 'optiflow.db')
+                models_path = os.path.join(os.path.dirname(__file__), '..', '..', 'models')
+
+                try:
+                    # Exécuter le script de mise à jour
+                    result = subprocess.run(
+                        [sys.executable, script_path, '--force', '--days=30', f'--db={db_path}', f'--models={models_path}'],
+                        capture_output=True,
+                        text=True,
+                        timeout=300  # Timeout de 5 minutes
+                    )
+
+                    if result.returncode == 0:
+                        st.success(":material/check_circle: Prédictions mises à jour avec succès !")
+                        st.balloons()
+                        # Vider le cache et rafraîchir
+                        st.cache_data.clear()
+                        st.rerun()
+                    else:
+                        st.error(f":material/error: Erreur lors de la mise à jour : {result.stderr}")
+
+                except subprocess.TimeoutExpired:
+                    st.error(":material/timer_off: La mise à jour a pris trop de temps (>5 minutes)")
+                except Exception as e:
+                    st.error(f":material/error: Erreur inattendue : {str(e)}")

@@ -1,0 +1,14 @@
+{
+  "product_id": 6,
+  "product_name": "Micro-ondes 25L",
+  "train_size": 877,
+  "test_size": 219,
+  "mape": 10.78,
+  "trained_at": "2025-09-10T02:54:16.177923",
+  "data_range": {
+    "start": "2022-01-01",
+    "end": "2024-05-26"
+  },
+  "has_events": true,
+  "performance_grade": "B"
+}
