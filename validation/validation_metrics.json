@@ -1,0 +1,312 @@
+{
+  "global_metrics": {
+    "mape": 12.672,
+    "rmse": 4.235,
+    "mae": 2.171,
+    "r2_score": 0.963,
+    "mean_error": -0.132,
+    "std_error": 4.232,
+    "max_error": 36.456
+  },
+  "per_product_metrics": {
+    "1": {
+      "name": "Climatiseur Split 12000 BTU",
+      "regression": {
+        "mape": 15.91,
+        "rmse": 10.732,
+        "mae": 8.199,
+        "r2_score": 0.868,
+        "mean_error": -0.573,
+        "std_error": 10.717,
+        "max_error": 36.456
+      },
+      "business": {
+        "ruptures_sans_prediction": 363,
+        "ruptures_avec_prediction": 84,
+        "taux_ruptures_evitees": 76.86,
+        "economies_ruptures": 5580.0,
+        "cout_surstock": 0.0,
+        "economies_nettes": 5580.0,
+        "taux_service": 77.05,
+        "stock_moyen_predit": 63.11,
+        "stock_moyen_reel": 63.68
+      }
+    },
+    "2": {
+      "name": "Réfrigérateur Double Porte 350L",
+      "regression": {
+        "mape": 11.079,
+        "rmse": 5.93,
+        "mae": 4.859,
+        "r2_score": 0.784,
+        "mean_error": 0.133,
+        "std_error": 5.928,
+        "max_error": 22.132
+      },
+      "business": {
+        "ruptures_sans_prediction": 364,
+        "ruptures_avec_prediction": 54,
+        "taux_ruptures_evitees": 85.16,
+        "economies_ruptures": 6200.0,
+        "cout_surstock": 0.27,
+        "economies_nettes": 6199.73,
+        "taux_service": 85.25,
+        "stock_moyen_predit": 45.83,
+        "stock_moyen_reel": 45.7
+      }
+    },
+    "3": {
+      "name": "Congélateur Horizontal 300L",
+      "regression": {
+        "mape": 10.664,
+        "rmse": 1.693,
+        "mae": 1.362,
+        "r2_score": 0.826,
+        "mean_error": -0.198,
+        "std_error": 1.681,
+        "max_error": 5.449
+      },
+      "business": {
+        "ruptures_sans_prediction": 356,
+        "ruptures_avec_prediction": 83,
+        "taux_ruptures_evitees": 76.69,
+        "economies_ruptures": 5460.0,
+        "cout_surstock": 0.0,
+        "economies_nettes": 5460.0,
+        "taux_service": 77.32,
+        "stock_moyen_predit": 12.81,
+        "stock_moyen_reel": 13.01
+      }
+    },
+    "4": {
+      "name": "Ventilateur Tour",
+      "regression": {
+        "mape": 23.446,
+        "rmse": 7.2,
+        "mae": 5.45,
+        "r2_score": 0.879,
+        "mean_error": -0.566,
+        "std_error": 7.178,
+        "max_error": 28.574
+      },
+      "business": {
+        "ruptures_sans_prediction": 357,
+        "ruptures_avec_prediction": 91,
+        "taux_ruptures_evitees": 74.51,
+        "economies_ruptures": 5320.0,
+        "cout_surstock": 0.0,
+        "economies_nettes": 5320.0,
+        "taux_service": 75.14,
+        "stock_moyen_predit": 36.26,
+        "stock_moyen_reel": 36.83
+      }
+    },
+    "5": {
+      "name": "Machine à Laver 7kg",
+      "regression": {
+        "mape": 10.194,
+        "rmse": 1.3,
+        "mae": 1.067,
+        "r2_score": 0.741,
+        "mean_error": -0.114,
+        "std_error": 1.295,
+        "max_error": 4.69
+      },
+      "business": {
+        "ruptures_sans_prediction": 355,
+        "ruptures_avec_prediction": 79,
+        "taux_ruptures_evitees": 77.75,
+        "economies_ruptures": 5520.0,
+        "cout_surstock": 0.0,
+        "economies_nettes": 5520.0,
+        "taux_service": 78.42,
+        "stock_moyen_predit": 10.4,
+        "stock_moyen_reel": 10.51
+      }
+    },
+    "6": {
+      "name": "Micro-ondes 25L",
+      "regression": {
+        "mape": 10.617,
+        "rmse": 2.357,
+        "mae": 1.956,
+        "r2_score": 0.686,
+        "mean_error": -0.388,
+        "std_error": 2.325,
+        "max_error": 11.166
+      },
+      "business": {
+        "ruptures_sans_prediction": 361,
+        "ruptures_avec_prediction": 93,
+        "taux_ruptures_evitees": 74.24,
+        "economies_ruptures": 5360.0,
+        "cout_surstock": 0.0,
+        "economies_nettes": 5360.0,
+        "taux_service": 74.59,
+        "stock_moyen_predit": 17.99,
+        "stock_moyen_reel": 18.38
+      }
+    },
+    "7": {
+      "name": "Déshumidificateur",
+      "regression": {
+        "mape": 14.268,
+        "rmse": 0.546,
+        "mae": 0.442,
+        "r2_score": 0.848,
+        "mean_error": -0.096,
+        "std_error": 0.538,
+        "max_error": 1.702
+      },
+      "business": {
+        "ruptures_sans_prediction": 312,
+        "ruptures_avec_prediction": 109,
+        "taux_ruptures_evitees": 65.06,
+        "economies_ruptures": 4060.0,
+        "cout_surstock": 0.0,
+        "economies_nettes": 4060.0,
+        "taux_service": 70.22,
+        "stock_moyen_predit": 3.38,
+        "stock_moyen_reel": 3.47
+      }
+    },
+    "8": {
+      "name": "Purificateur d'Air",
+      "regression": {
+        "mape": 11.807,
+        "rmse": 0.591,
+        "mae": 0.492,
+        "r2_score": 0.758,
+        "mean_error": -0.021,
+        "std_error": 0.591,
+        "max_error": 1.988
+      },
+      "business": {
+        "ruptures_sans_prediction": 337,
+        "ruptures_avec_prediction": 63,
+        "taux_ruptures_evitees": 81.31,
+        "economies_ruptures": 5480.0,
+        "cout_surstock": 0.0,
+        "economies_nettes": 5480.0,
+        "taux_service": 82.79,
+        "stock_moyen_predit": 4.27,
+        "stock_moyen_reel": 4.29
+      }
+    },
+    "9": {
+      "name": "Cave à Vin 12 Bouteilles",
+      "regression": {
+        "mape": 11.601,
+        "rmse": 0.282,
+        "mae": 0.215,
+        "r2_score": 0.784,
+        "mean_error": 0.017,
+        "std_error": 0.281,
+        "max_error": 1.781
+      },
+      "business": {
+        "ruptures_sans_prediction": 326,
+        "ruptures_avec_prediction": 36,
+        "taux_ruptures_evitees": 88.96,
+        "economies_ruptures": 5800.0,
+        "cout_surstock": 0.03,
+        "economies_nettes": 5799.97,
+        "taux_service": 90.16,
+        "stock_moyen_predit": 1.94,
+        "stock_moyen_reel": 1.92
+      }
+    },
+    "10": {
+      "name": "Cuisinière 4 Feux",
+      "regression": {
+        "mape": 10.39,
+        "rmse": 0.962,
+        "mae": 0.79,
+        "r2_score": 0.741,
+        "mean_error": 0.139,
+        "std_error": 0.952,
+        "max_error": 2.453
+      },
+      "business": {
+        "ruptures_sans_prediction": 355,
+        "ruptures_avec_prediction": 32,
+        "taux_ruptures_evitees": 90.99,
+        "economies_ruptures": 6460.0,
+        "cout_surstock": 0.28,
+        "economies_nettes": 6459.72,
+        "taux_service": 91.26,
+        "stock_moyen_predit": 8.01,
+        "stock_moyen_reel": 7.87
+      }
+    },
+    "11": {
+      "name": "Hotte Aspirante",
+      "regression": {
+        "mape": 9.444,
+        "rmse": 0.579,
+        "mae": 0.468,
+        "r2_score": 0.737,
+        "mean_error": -0.033,
+        "std_error": 0.579,
+        "max_error": 3.763
+      },
+      "business": {
+        "ruptures_sans_prediction": 346,
+        "ruptures_avec_prediction": 46,
+        "taux_ruptures_evitees": 86.71,
+        "economies_ruptures": 6000.0,
+        "cout_surstock": 0.0,
+        "economies_nettes": 6000.0,
+        "taux_service": 87.43,
+        "stock_moyen_predit": 5.05,
+        "stock_moyen_reel": 5.08
+      }
+    },
+    "12": {
+      "name": "Chauffe-eau Électrique",
+      "regression": {
+        "mape": 12.648,
+        "rmse": 0.942,
+        "mae": 0.751,
+        "r2_score": 0.851,
+        "mean_error": 0.12,
+        "std_error": 0.935,
+        "max_error": 3.032
+      },
+      "business": {
+        "ruptures_sans_prediction": 355,
+        "ruptures_avec_prediction": 59,
+        "taux_ruptures_evitees": 83.38,
+        "economies_ruptures": 5920.0,
+        "cout_surstock": 0.24,
+        "economies_nettes": 5919.76,
+        "taux_service": 83.88,
+        "stock_moyen_predit": 6.48,
+        "stock_moyen_reel": 6.36
+      }
+    }
+  },
+  "summary": {
+    "mape_global": 12.672,
+    "rmse_global": 4.235,
+    "r2_global": 0.963,
+    "taux_ruptures_evitees_moyen": 80.14,
+    "taux_service_moyen": 81.13,
+    "economies_nettes_totales": 67159.18,
+    "performance_niveau": "Bon",
+    "validation_academique": {
+      "methodologie": "Split temporel strict (2022-2023 train, 2024 test)",
+      "metriques_utilisees": [
+        "MAPE",
+        "RMSE",
+        "MAE",
+        "R²",
+        "Precision",
+        "Recall",
+        "F1"
+      ],
+      "reproductible": true,
+      "sans_data_leakage": true
+    }
+  }
+}
